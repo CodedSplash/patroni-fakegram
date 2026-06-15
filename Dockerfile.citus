@@ -194,7 +194,9 @@ RUN sed -i 's/env python/&3/' /patroni*.py \
     # client cert for HAProxy to access Patroni REST API
     && if [ "$COMPRESS" = "true" ]; then chmod u+s /usr/bin/sudo; fi \
     && chmod +s /bin/ping \
-    && chown -R postgres:postgres $PGHOME /run /etc/haproxy
+    && chown -R postgres:postgres $PGHOME /run /etc/haproxy \
+    && mkdir -p /var/lib/etcd && chown -R postgres:postgres /var/lib/etcd && chmod 700 /var/lib/etcd \
+    && mkdir -p $PGDATA && chown -R postgres:postgres $PGDATA && chmod 700 $PGDATA
 
 USER postgres
 

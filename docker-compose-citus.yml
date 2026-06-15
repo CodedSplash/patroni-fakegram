@@ -11,6 +11,19 @@
 # https://github.com/patroni/patroni/blob/master/docker/README.md#citus-cluster
 networks:
     net:
+        driver: bridge
+
+volumes:
+    etcd1_data:
+    etcd2_data:
+    etcd3_data:
+    coord1_data:
+    coord2_data:
+    coord3_data:
+    work1-1_data:
+    work1-2_data:
+    work2-1_data:
+    work2-2_data:
 
 services:
     etcd1: &etcd
@@ -25,19 +38,25 @@ services:
             ETCD_UNSUPPORTED_ARCH: arm64
         container_name: etcd1
         hostname: etcd1
-        command: etcd --name etcd1 --initial-advertise-peer-urls http://etcd1:2380
+        volumes:
+            - etcd1_data:/var/lib/etcd
+        command: etcd --name etcd1 --initial-advertise-peer-urls http://etcd1:2380 --data-dir /var/lib/etcd
 
     etcd2:
         <<: *etcd
         container_name: etcd2
         hostname: etcd2
-        command: etcd --name etcd2 --initial-advertise-peer-urls http://etcd2:2380
+        volumes:
+            - etcd2_data:/var/lib/etcd
+        command: etcd --name etcd2 --initial-advertise-peer-urls http://etcd2:2380 --data-dir /var/lib/etcd
 
     etcd3:
         <<: *etcd
         container_name: etcd3
         hostname: etcd3
-        command: etcd --name etcd3 --initial-advertise-peer-urls http://etcd3:2380
+        volumes:
+            - etcd3_data:/var/lib/etcd
+        command: etcd --name etcd3 --initial-advertise-peer-urls http://etcd3:2380 --data-dir /var/lib/etcd
 
     haproxy:
         image: ${PATRONI_IMAGE:-patroni-citus-fakegram}
@@ -66,6 +85,8 @@ services:
         env_file: docker/patroni.env
         hostname: coord1
         container_name: coord1
+        volumes:
+            - coord1_data:/home/postgres/data
         environment: &coord_env
             <<: *haproxy_env
             PATRONI_NAME: coord1
@@ -77,6 +98,8 @@ services:
         env_file: docker/patroni.env
         hostname: coord2
         container_name: coord2
+        volumes:
+            - coord2_data:/home/postgres/data
         environment:
             <<: *coord_env
             PATRONI_NAME: coord2
@@ -87,6 +110,8 @@ services:
         env_file: docker/patroni.env
         hostname: coord3
         container_name: coord3
+        volumes:
+            - coord3_data:/home/postgres/data
         environment:
             <<: *coord_env
             PATRONI_NAME: coord3
@@ -98,6 +123,8 @@ services:
         env_file: docker/patroni.env
         hostname: work1-1
         container_name: work1-1
+        volumes:
+            - work1-1_data:/home/postgres/data
         environment: &work1_env
             <<: *haproxy_env
             PATRONI_NAME: work1-1
@@ -109,6 +136,8 @@ services:
         env_file: docker/patroni.env
         hostname: work1-2
         container_name: work1-2
+        volumes:
+            - work1-2_data:/home/postgres/data
         environment:
             <<: *work1_env
             PATRONI_NAME: work1-2
@@ -120,6 +149,8 @@ services:
         env_file: docker/patroni.env
         hostname: work2-1
         container_name: work2-1
+        volumes:
+            - work2-1_data:/home/postgres/data
         environment: &work2_env
             <<: *haproxy_env
             PATRONI_NAME: work2-1
@@ -131,6 +162,8 @@ services:
         env_file: docker/patroni.env
         hostname: work2-2
         container_name: work2-2
+        volumes:
+            - work2-2_data:/home/postgres/data
         environment:
             <<: *work2_env
             PATRONI_NAME: work2-2
