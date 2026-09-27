@@ -13,6 +13,7 @@ Global/Universal
 -  **PATRONI\_NAME**: name of the node where the current instance of Patroni is running. Must be unique for the cluster. The value ``__patroni_strict_sync_replica_placeholder__`` is reserved for internal use by Patroni and cannot be used as a node name.
 -  **PATRONI\_NAMESPACE**: path within the configuration store where Patroni will keep information about the cluster. Default value: "/service"
 -  **PATRONI\_SCOPE**: cluster name
+-  **PATRONI\_SITE**: optional string name of the physical site or location where this Patroni node runs, such as a data center, availability zone, or region. When configured, Patroni records it in member metadata and uses it to prefer local automatic failover to the site where the last known leader is located, while also helping to prefer local clone sources for replica bootstrap and ``patronictl reinit``.
 -  **PG\_MALLOC\_ARENA\_MAX**: custom value for ``MALLOC_ARENA_MAX`` environment variable for  ``postmaster`` process. If not set, ``postmaster`` will inherit ``MALLOC_ARENA_MAX`` value.
 
 Log
@@ -140,6 +141,15 @@ Raft (deprecated)
 -  **PATRONI\_RAFT\_PARTNER\_ADDRS**: list of other Patroni nodes in the cluster in format ``"'ip1:port1','ip2:port2'"``. It is important to quote every single entity!
 -  **PATRONI\_RAFT\_DATA\_DIR**: directory where to store Raft log and snapshot. If not specified the current working directory is used.
 -  **PATRONI\_RAFT\_PASSWORD**: (optional) Encrypt Raft traffic with a specified password, requires ``cryptography`` python module.
+-  **PATRONI\_RAFT\_MIN\_TIMEOUT**: (optional) minimum election timeout in seconds for the underlying pysyncobj Raft implementation. Must be greater than 3 \* ``PATRONI_RAFT_APPEND_ENTRIES_PERIOD``. Default: ``0.4``.
+-  **PATRONI\_RAFT\_MAX\_TIMEOUT**: (optional) maximum election timeout in seconds for the underlying pysyncobj Raft implementation. Must be greater than ``PATRONI_RAFT_MIN_TIMEOUT``. Default: ``1.4``.
+-  **PATRONI\_RAFT\_CONNECTION\_TIMEOUT**: (optional) time in seconds after which a connection with no data received is considered dead. Must be greater than or equal to ``PATRONI_RAFT_MAX_TIMEOUT``. Default: ``3.5``.
+-  **PATRONI\_RAFT\_APPEND\_ENTRIES\_PERIOD**: (optional) interval in seconds for sending heartbeat commands. Must be less than one-third of ``PATRONI_RAFT_MIN_TIMEOUT``. Default: ``0.1``.
+-  **PATRONI\_RAFT\_CONNECTION\_RETRY\_TIME**: (optional) interval in seconds between reconnection attempts to offline nodes. Default: ``5.0``.
+-  **PATRONI\_RAFT\_LEADER\_FALLBACK\_TIMEOUT**: (optional) time in seconds after which a leader with no response from the majority falls back to follower state. Must be greater than ``PATRONI_RAFT_APPEND_ENTRIES_PERIOD``. Default: ``30.0``.
+
+.. note::
+   Patroni validates these constraints at startup and will refuse to start if they are violated. These values cannot be changed at runtime and require a restart. See :ref:`raft_settings` for details, including the high-latency limitation.
 
 PostgreSQL
 ----------
@@ -212,6 +222,8 @@ REST API
 -  **PATRONI\_RESTAPI\_HTTP\_EXTRA\_HEADERS**: (optional) HTTP headers let the REST API server pass additional information with an HTTP response.
 -  **PATRONI\_RESTAPI\_HTTPS\_EXTRA\_HEADERS**: (optional) HTTPS headers let the REST API server pass additional information with an HTTP response when TLS is enabled. This will also pass additional information set in ``http_extra_headers``.
 -  **PATRONI\_RESTAPI\_REQUEST\_QUEUE\_SIZE**: (optional): Sets request queue size for TCP socket used by Patroni REST API.  Once the queue is full, further requests get a "Connection denied" error. The default value is 5.
+-  **PATRONI\_RESTAPI\_HANDSHAKE\_TIMEOUT**: (optional): Maximum time in seconds a single client is given to complete the TLS handshake. Connections that do not complete it in time are closed. It only applies when ``PATRONI_RESTAPI_CERTFILE`` is set. The default value is 2.
+-  **PATRONI\_RESTAPI\_REQUEST\_TIMEOUT**: (optional): Maximum time in seconds a single client is given to send its request, and to read the response. Connections that stay silent for longer are closed. The default value is 5.
 -  **PATRONI\_RESTAPI\_SERVER\_TOKENS**: (optional) Configures the value of the ``Server`` HTTP header.  ``Original`` (default) will expose the original behaviour and display the BaseHTTP and Python versions, e.g. ``BaseHTTP/0.6 Python/3.12.3``. ``Minimal``: The header will contain only the Patroni version, e.g. ``Patroni/4.0.0``. ``ProductOnly``: The header will contain only the product name, e.g. ``Patroni``.
 
 .. warning::
