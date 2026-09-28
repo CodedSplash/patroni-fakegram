@@ -1,0 +1,133 @@
+name: fakegram-patroni
+
+x-patroni-image: &patroni-image
+  build:
+    context: ..
+    dockerfile: Dockerfile
+    args:
+      PG_MAJOR: ${PG_MAJOR:-17}
+  image: patroni-fakegram:pg${PG_MAJOR:-17}
+
+x-etcd: &etcd
+  image: quay.io/coreos/etcd:${ETCD_VERSION:-v3.5.21}
+  networks: [patroni]
+  healthcheck:
+    test: ["CMD", "etcdctl", "--endpoints=http://127.0.0.1:2379", "endpoint", "health"]
+    interval: 5s
+    timeout: 5s
+    retries: 20
+    start_period: 10s
+
+x-etcd-env: &etcd-env
+  ETCD_DATA_DIR: /etcd-data
+  ETCD_LISTEN_PEER_URLS: http://0.0.0.0:2380
+  ETCD_LISTEN_CLIENT_URLS: http://0.0.0.0:2379
+  ETCD_INITIAL_CLUSTER: ${ETCD_INITIAL_CLUSTER:-etcd1=http://etcd1:2380}
+  ETCD_INITIAL_CLUSTER_STATE: new
+  ETCD_INITIAL_CLUSTER_TOKEN: fakegram-etcd
+  ETCD_AUTO_COMPACTION_MODE: periodic
+  ETCD_AUTO_COMPACTION_RETENTION: 1h
+  ETCD_QUOTA_BACKEND_BYTES: "2147483648"
+
+x-patroni-env: &patroni-env
+  PATRONI_SCOPE: ${PATRONI_SCOPE:-fakegram}
+  PATRONI_NAMESPACE: /service
+  PATRONI_ETCD3_HOSTS: ${PATRONI_ETCD3_HOSTS:-'etcd1:2379'}
+  ETCDCTL_ENDPOINTS: ${ETCDCTL_ENDPOINTS:-http://etcd1:2379}
+  PATRONI_SUPERUSER_USERNAME: postgres
+  PATRONI_SUPERUSER_PASSWORD: ${PATRONI_SUPERUSER_PASSWORD:-postgres}
+  PATRONI_REPLICATION_USERNAME: replicator
+  PATRONI_REPLICATION_PASSWORD: ${PATRONI_REPLICATION_PASSWORD:-replicate}
+  PATRONI_RESTAPI_USERNAME: ${PATRONI_RESTAPI_USERNAME:-admin}
+  PATRONI_RESTAPI_PASSWORD: ${PATRONI_RESTAPI_PASSWORD:-admin}
+
+x-patroni-node: &patroni-node
+  <<: *patroni-image
+  networks: [patroni]
+  shm_size: 256m
+  stop_grace_period: 60s
+  healthcheck:
+    test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8008/health >/dev/null"]
+    interval: 10s
+    timeout: 5s
+    retries: 30
+    start_period: 30s
+
+services:
+  etcd1:
+    <<: *etcd
+    hostname: etcd1
+    environment:
+      <<: *etcd-env
+      ETCD_NAME: etcd1
+      ETCD_INITIAL_ADVERTISE_PEER_URLS: http://etcd1:2380
+      ETCD_ADVERTISE_CLIENT_URLS: http://etcd1:2379
+    volumes:
+      - etcd1-data:/etcd-data
+
+  patroni1:
+    <<: *patroni-node
+    hostname: patroni1
+    environment:
+      <<: *patroni-env
+      PATRONI_NAME: patroni1
+    volumes:
+      - patroni1-data:/home/postgres/data
+      - ./patroni.yml:/home/postgres/postgres0.yml:ro
+    depends_on:
+      etcd1:
+        condition: service_healthy
+
+  haproxy:
+    <<: *patroni-image
+    hostname: haproxy
+    command: haproxy
+    environment:
+      <<: *patroni-env
+    networks:
+      patroni:
+      fakegram-db:
+        aliases:
+          - pg-haproxy
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -q -h 127.0.0.1 -p 5000"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+      start_period: 20s
+    depends_on:
+      etcd1:
+        condition: service_healthy
+
+  db-init:
+    <<: *patroni-image
+    entrypoint: ["/bin/sh", "/fakegram/init-db.sh"]
+    networks: [patroni]
+    environment:
+      PGHOST: haproxy
+      PGPORT: 5000
+      PGUSER: postgres
+      PGPASSWORD: ${PATRONI_SUPERUSER_PASSWORD:-postgres}
+      APP_DB_NAME: ${APP_DB_NAME:-fakegram}
+      APP_DB_USER: ${APP_DB_USER:-fakegram}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:-fakegram}
+      APP_DB_CREATEDB: ${APP_DB_CREATEDB:-false}
+      DEBEZIUM_DB_USER: ${DEBEZIUM_DB_USER:-debezium}
+      DEBEZIUM_DB_PASSWORD: ${DEBEZIUM_DB_PASSWORD:-debezium}
+      DEBEZIUM_PUBLICATION: ${DEBEZIUM_PUBLICATION:-dbz_publication}
+    volumes:
+      - ./init-db.sh:/fakegram/init-db.sh:ro
+    depends_on:
+      haproxy:
+        condition: service_healthy
+    restart: "no"
+
+networks:
+  patroni:
+    name: ${COMPOSE_PROJECT_NAME:-fakegram-patroni}-network
+  fakegram-db:
+    name: ${FAKEGRAM_DB_NETWORK:-fakegram-db-network}
+
+volumes:
+  etcd1-data:
+  patroni1-data:

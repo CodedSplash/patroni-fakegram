@@ -1,0 +1,66 @@
+scope: fakegram
+namespace: /service/
+
+restapi:
+  listen: 0.0.0.0:8008
+  connect_address: 127.0.0.1:8008
+
+bootstrap:
+  dcs:
+    ttl: 30
+    loop_wait: 10
+    retry_timeout: 10
+    maximum_lag_on_failover: 1048576
+    failsafe_mode: true
+    postgresql:
+      use_pg_rewind: true
+      use_slots: true
+      pg_hba:
+      - local all all trust
+      - host replication replicator 0.0.0.0/0 scram-sha-256
+      - host all all 0.0.0.0/0 scram-sha-256
+      parameters:
+        password_encryption: scram-sha-256
+        max_connections: 200
+        shared_buffers: 256MB
+        effective_cache_size: 768MB
+        work_mem: 8MB
+        maintenance_work_mem: 64MB
+        wal_level: logical
+        hot_standby: "on"
+        hot_standby_feedback: "on"
+        wal_log_hints: "on"
+        max_wal_senders: 20
+        max_replication_slots: 20
+        max_worker_processes: 8
+        wal_keep_size: 512MB
+        max_slot_wal_keep_size: 4GB
+        log_min_duration_statement: 500
+        log_lock_waits: "on"
+    slots:
+      debezium_fakegram:
+        type: logical
+        database: fakegram
+        plugin: pgoutput
+
+  initdb:
+  - encoding: UTF8
+  - locale: en_US.UTF-8
+  - data-checksums
+
+postgresql:
+  listen: 0.0.0.0:5432
+  connect_address: 127.0.0.1:5432
+  data_dir: /home/postgres/data
+  pgpass: /tmp/pgpass
+  authentication:
+    superuser:
+      username: postgres
+    replication:
+      username: replicator
+
+tags:
+  nofailover: false
+  noloadbalance: false
+  clonefrom: false
+  nosync: false

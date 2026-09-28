@@ -168,6 +168,7 @@ RUN sed -i 's/env python/&3/' /patroni*.py \
     && sed -i 's/^\(.*\) \(.*\) md5/\1 all md5/' postgres?.yml \
     && if [ "$COMPRESS" = "true" ]; then chmod u+s /usr/bin/sudo; fi \
     && chmod +s /bin/ping \
+    && mkdir -p "$PGDATA" && chmod 0700 "$PGDATA" \
     && chown -R postgres:postgres "$PGHOME" /run /etc/haproxy
 
 USER postgres

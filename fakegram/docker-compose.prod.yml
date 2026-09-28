@@ -1,0 +1,121 @@
+x-prod: &prod
+  restart: unless-stopped
+  logging:
+    driver: json-file
+    options:
+      max-size: "20m"
+      max-file: "5"
+
+x-etcd-prod-env: &etcd-prod-env
+  ETCD_INITIAL_CLUSTER: etcd1=http://etcd1:2380,etcd2=http://etcd2:2380,etcd3=http://etcd3:2380
+
+x-patroni-prod-env: &patroni-prod-env
+  PATRONI_ETCD3_HOSTS: "'etcd1:2379','etcd2:2379','etcd3:2379'"
+  ETCDCTL_ENDPOINTS: http://etcd1:2379,http://etcd2:2379,http://etcd3:2379
+  PATRONI_SUPERUSER_PASSWORD: ${PATRONI_SUPERUSER_PASSWORD:?PATRONI_SUPERUSER_PASSWORD is required in production}
+  PATRONI_REPLICATION_PASSWORD: ${PATRONI_REPLICATION_PASSWORD:?PATRONI_REPLICATION_PASSWORD is required in production}
+  PATRONI_RESTAPI_PASSWORD: ${PATRONI_RESTAPI_PASSWORD:?PATRONI_RESTAPI_PASSWORD is required in production}
+
+x-patroni-prod-node: &patroni-prod-node
+  <<: *prod
+  deploy:
+    resources:
+      limits:
+        memory: 1g
+  depends_on:
+    etcd1:
+      condition: service_healthy
+    etcd2:
+      condition: service_healthy
+    etcd3:
+      condition: service_healthy
+
+services:
+  etcd1:
+    <<: *prod
+    environment:
+      <<: *etcd-prod-env
+
+  etcd2:
+    extends:
+      file: docker-compose.yml
+      service: etcd1
+    <<: *prod
+    hostname: etcd2
+    environment:
+      <<: *etcd-prod-env
+      ETCD_NAME: etcd2
+      ETCD_INITIAL_ADVERTISE_PEER_URLS: http://etcd2:2380
+      ETCD_ADVERTISE_CLIENT_URLS: http://etcd2:2379
+    volumes:
+      - etcd2-data:/etcd-data
+
+  etcd3:
+    extends:
+      file: docker-compose.yml
+      service: etcd1
+    <<: *prod
+    hostname: etcd3
+    environment:
+      <<: *etcd-prod-env
+      ETCD_NAME: etcd3
+      ETCD_INITIAL_ADVERTISE_PEER_URLS: http://etcd3:2380
+      ETCD_ADVERTISE_CLIENT_URLS: http://etcd3:2379
+    volumes:
+      - etcd3-data:/etcd-data
+
+  patroni1:
+    <<: *patroni-prod-node
+    environment:
+      <<: *patroni-prod-env
+
+  patroni2:
+    extends:
+      file: docker-compose.yml
+      service: patroni1
+    <<: *patroni-prod-node
+    hostname: patroni2
+    environment:
+      <<: *patroni-prod-env
+      PATRONI_NAME: patroni2
+    volumes:
+      - patroni2-data:/home/postgres/data
+
+  patroni3:
+    extends:
+      file: docker-compose.yml
+      service: patroni1
+    <<: *patroni-prod-node
+    hostname: patroni3
+    environment:
+      <<: *patroni-prod-env
+      PATRONI_NAME: patroni3
+    volumes:
+      - patroni3-data:/home/postgres/data
+
+  haproxy:
+    <<: *prod
+    ports:
+      - "${PG_BIND_ADDRESS:-127.0.0.1}:${PG_PRIMARY_HOST_PORT:-5000}:5000"
+      - "${PG_BIND_ADDRESS:-127.0.0.1}:${PG_REPLICAS_HOST_PORT:-5001}:5001"
+      - "${PG_BIND_ADDRESS:-127.0.0.1}:${HAPROXY_STATS_HOST_PORT:-7000}:7000"
+    environment:
+      <<: *patroni-prod-env
+    depends_on:
+      etcd2:
+        condition: service_healthy
+      etcd3:
+        condition: service_healthy
+
+  db-init:
+    environment:
+      PGPASSWORD: ${PATRONI_SUPERUSER_PASSWORD:?PATRONI_SUPERUSER_PASSWORD is required in production}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?APP_DB_PASSWORD is required in production}
+      APP_DB_CREATEDB: "false"
+      DEBEZIUM_DB_PASSWORD: ${DEBEZIUM_DB_PASSWORD:?DEBEZIUM_DB_PASSWORD is required in production}
+
+volumes:
+  etcd2-data:
+  etcd3-data:
+  patroni2-data:
+  patroni3-data:

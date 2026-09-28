@@ -1,0 +1,14 @@
+services:
+  haproxy:
+    ports:
+      - "${PG_PRIMARY_HOST_PORT:-5000}:5000"
+      - "${PG_REPLICAS_HOST_PORT:-5001}:5001"
+      - "${HAPROXY_STATS_HOST_PORT:-7000}:7000"
+
+  patroni1:
+    ports:
+      - "${PATRONI_API_HOST_PORT:-8008}:8008"
+
+  db-init:
+    environment:
+      APP_DB_CREATEDB: "true"
