@@ -36,7 +36,9 @@ docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod
 4. `db-init` (одноразовый, идемпотентный) через HAProxy создаёт/обновляет:
    * роль приложения `APP_DB_USER` и БД `APP_DB_NAME` (владелец — эта роль);
    * роль `DEBEZIUM_DB_USER` с `REPLICATION` и `SELECT` на таблицы `public` (включая будущие);
-   * публикацию `dbz_publication FOR ALL TABLES` для Debezium.
+   * **пустую** публикацию `dbz_publication` (владелец — `APP_DB_USER`). Она должна существовать раньше любого DML,
+     иначе логический слот падает на изменениях, записанных до её появления. Таблицу `outbox_events` в неё
+     добавляет миграция Fakegram-backend.
 
 ## Логическая репликация (Debezium)
 

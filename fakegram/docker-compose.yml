@@ -114,7 +114,6 @@ services:
       APP_DB_CREATEDB: ${APP_DB_CREATEDB:-false}
       DEBEZIUM_DB_USER: ${DEBEZIUM_DB_USER:-debezium}
       DEBEZIUM_DB_PASSWORD: ${DEBEZIUM_DB_PASSWORD:-debezium}
-      DEBEZIUM_PUBLICATION: ${DEBEZIUM_PUBLICATION:-dbz_publication}
     volumes:
       - ./init-db.sh:/fakegram/init-db.sh:ro
     depends_on:

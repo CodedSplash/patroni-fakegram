@@ -12,7 +12,6 @@ app_password="${APP_DB_PASSWORD:?APP_DB_PASSWORD is required}"
 app_createdb="${APP_DB_CREATEDB:-false}"
 dbz_user="${DEBEZIUM_DB_USER:-debezium}"
 dbz_password="${DEBEZIUM_DB_PASSWORD:?DEBEZIUM_DB_PASSWORD is required}"
-dbz_publication="${DEBEZIUM_PUBLICATION:-dbz_publication}"
 attempts="${INIT_MAX_ATTEMPTS:-60}"
 attempt=1
 
@@ -32,8 +31,7 @@ psql -v ON_ERROR_STOP=1 \
   -v app_password="$app_password" \
   -v app_createdb="$app_createdb" \
   -v dbz_user="$dbz_user" \
-  -v dbz_password="$dbz_password" \
-  -v dbz_publication="$dbz_publication" <<'SQL'
+  -v dbz_password="$dbz_password" <<'SQL'
 SELECT format('CREATE ROLE %I LOGIN', :'app_user')
 WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'app_user') \gexec
 
@@ -66,8 +64,13 @@ SELECT format(
   :'dbz_user'
 ) \gexec
 
-SELECT format('CREATE PUBLICATION %I FOR ALL TABLES', :'dbz_publication')
-WHERE NOT EXISTS (SELECT 1 FROM pg_publication WHERE pubname = :'dbz_publication') \gexec
-SQL
+-- Пустая публикация должна появиться раньше любого DML в БД: логический слот
+-- Patroni декодирует WAL с момента создания и падает на изменениях, записанных
+-- до появления публикации. Таблицу outbox_events в неё добавляет миграция
+-- Fakegram-backend, поэтому владелец — пользователь приложения.
+SELECT 'CREATE PUBLICATION dbz_publication'
+WHERE NOT EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'dbz_publication') \gexec
 
-echo "[db-init] database '$app_db', roles '$app_user' and '$dbz_user', publication '$dbz_publication' are ready"
+SELECT format('ALTER PUBLICATION dbz_publication OWNER TO %I', :'app_user') \gexec
+SQL
+echo "[db-init] database '$app_db', roles '$app_user' and '$dbz_user' are ready"
